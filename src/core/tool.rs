@@ -1,4 +1,5 @@
-use crate::config::Tool;
+use crate::core::config::Tool;
+use crate::error::{Result, ToolError};
 use std::path::Path;
 use std::process::Command;
 
@@ -14,15 +15,20 @@ pub fn replace_variables(command: &str, project_path: &Path) -> String {
         .replace("$PROJECT_NAME", &name_str)
 }
 
-pub fn launch_tool(tool: &Tool, project_path: &Path) {
+pub fn launch_tool(tool: &Tool, project_path: &Path, dry_run: bool) -> Result<()> {
     let command = replace_variables(&tool.command, project_path);
+
+    if dry_run {
+        println!("[Dry-run] Would execute: {}", command);
+        return Ok(());
+    }
 
     #[cfg(target_os = "windows")]
     {
         Command::new("cmd")
             .args(["/C", &command])
             .spawn()
-            .expect("Failed to launch tool");
+            .map_err(|e| ToolError::LaunchFailed(e.to_string()))?;
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -31,8 +37,10 @@ pub fn launch_tool(tool: &Tool, project_path: &Path) {
             .arg("-c")
             .arg(&command)
             .spawn()
-            .expect("Failed to launch tool");
+            .map_err(|e| ToolError::LaunchFailed(e.to_string()))?;
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -47,5 +55,13 @@ mod tests {
         let result = replace_variables(cmd, &path);
         assert!(result.contains("/Users/qizhi/Projects/my-project"));
         assert!(result.contains("my-project"));
+    }
+
+    #[test]
+    fn test_replace_variables_no_vars() {
+        let path = PathBuf::from("/test/project");
+        let cmd = "echo hello";
+        let result = replace_variables(cmd, &path);
+        assert_eq!(result, "echo hello");
     }
 }
