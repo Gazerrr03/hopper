@@ -51,15 +51,13 @@ impl Config {
         Self::default_config_dir().join("config.json")
     }
 
-    pub fn load_with_override(cli_config: Option<PathBuf>) -> Result<Self> {
-        let path = cli_config
+    pub fn resolve_path(cli_config: Option<PathBuf>) -> PathBuf {
+        cli_config
             .or_else(|| std::env::var("HOPPER_CONFIG").ok().map(PathBuf::from))
-            .unwrap_or_else(Config::default_config_path);
-
-        Self::load_from_path(&path)
+            .unwrap_or_else(Config::default_config_path)
     }
 
-    fn load_from_path(path: &PathBuf) -> Result<Self> {
+    pub fn load_from_path(path: &PathBuf) -> Result<Self> {
         if !path.exists() {
             return Ok(Self::default());
         }
@@ -67,8 +65,7 @@ impl Config {
         let content =
             fs::read_to_string(path).map_err(|e| ConfigError::ReadError(e.to_string()))?;
 
-        serde_json::from_str(&content)
-            .map_err(|e| ConfigError::ParseError(e.to_string()).into())
+        serde_json::from_str(&content).map_err(|e| ConfigError::ParseError(e.to_string()).into())
     }
 
     pub fn save(&self) -> Result<()> {
@@ -81,11 +78,10 @@ impl Config {
             fs::create_dir_all(parent).map_err(|e| ConfigError::WriteError(e.to_string()))?;
         }
 
-        let content =
-            serde_json::to_string_pretty(self).map_err(|e| ConfigError::WriteError(e.to_string()))?;
-
-        fs::write(path, content)
+        let content = serde_json::to_string_pretty(self)
             .map_err(|e| ConfigError::WriteError(e.to_string()))?;
+
+        fs::write(path, content).map_err(|e| ConfigError::WriteError(e.to_string()))?;
         Ok(())
     }
 
