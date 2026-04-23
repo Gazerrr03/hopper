@@ -27,16 +27,17 @@ pub fn launch_tool(tool: &Tool, project_path: &Path, dry_run: bool) -> Result<()
     {
         Command::new("cmd")
             .args(["/C", &command])
-            .spawn()
+            .status()
             .map_err(|e| ToolError::LaunchFailed(e.to_string()))?;
     }
 
     #[cfg(not(target_os = "windows"))]
     {
         Command::new("zsh")
+            .arg("-i")
             .arg("-c")
             .arg(&command)
-            .spawn()
+            .status()
             .map_err(|e| ToolError::LaunchFailed(e.to_string()))?;
     }
 
