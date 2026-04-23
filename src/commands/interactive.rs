@@ -2,9 +2,8 @@ use crate::core::cache::Cache;
 use crate::core::config::Config;
 use crate::core::project::{delete_project, discover_projects, sort_by_mru, Project};
 use crate::error::Result;
-use crate::ui::fzf::{ProjectSelection, SelectionType, UiBackend};
-use std::io::Write;
-use std::path::PathBuf;
+use crate::ui::fzf::{OnboardingChoice, ProjectSelection, ProjectSelectionResult, SelectionType, UiBackend};
+use std::fs;
 
 pub struct InteractiveSession<'a> {
     pub config: &'a mut Config,
@@ -30,7 +29,21 @@ impl<'a> InteractiveSession<'a> {
         }
 
         match self.ui.project_selection(&projects)? {
-            Some(selection) => self.handle_project_selection(&projects, selection),
+            Some(ProjectSelectionResult::Selected(selection)) => {
+                self.handle_project_selection(&projects, selection)
+            }
+            Some(ProjectSelectionResult::NewProject(name)) => {
+                self.handle_new_project(&name)
+            }
+            Some(ProjectSelectionResult::ManageProjectSets) => {
+                if let Some(new_sets) =
+                    self.ui.project_set_management(&self.config.project_sets)?
+                {
+                    self.config.project_sets = new_sets;
+                    self.config.save()?;
+                }
+                self.run()
+            }
             None => Ok(false),
         }
     }
@@ -87,52 +100,55 @@ impl<'a> InteractiveSession<'a> {
         }
     }
 
+    fn handle_new_project(&mut self, name: &str) -> Result<bool> {
+        let base_set = self
+            .config
+            .project_sets
+            .first()
+            .ok_or_else(|| crate::error::ToolError::LaunchFailed("No project set configured".to_string()))?;
+
+        let new_path = base_set.join(name);
+        fs::create_dir_all(&new_path)?;
+
+        self.cache.record_access(&new_path);
+        self.cache.save()?;
+        std::env::set_current_dir(&new_path)?;
+
+        match self.ui.tool_selection(&self.config.tools)? {
+            Some(idx) => {
+                if idx == usize::MAX {
+                    if let Some((tool_name, command)) = self.ui.add_tool_interactive()? {
+                        self.config.add_tool(tool_name, command);
+                        self.config.save()?;
+                    }
+                    return Ok(true);
+                }
+
+                let tool_name = self.config.tools[idx].name.clone();
+                self.config.increment_tool_usage(&tool_name);
+                self.config.save()?;
+
+                let tool = &self.config.tools[idx];
+                crate::core::tool::launch_tool(tool, &new_path, self.dry_run)?;
+                Ok(false)
+            }
+            None => Ok(true),
+        }
+    }
+
     fn run_onboarding(&mut self) -> Result<()> {
-        println!("First run setup...");
-        println!();
-        println!("Enter project set paths (e.g. ~/Projects, ~/Work):");
-        println!("Press Enter to confirm, empty to skip");
-        println!();
-
-        loop {
-            print!("Project set path: ");
-            std::io::stdout().flush()?;
-            let mut input = String::new();
-            std::io::stdin().read_line(&mut input)?;
-            let input = input.trim().to_string();
-
-            if input.is_empty() {
-                break;
+        match self.ui.onboarding_selection()? {
+            Some(OnboardingChoice::ConfigureProjectSets) => {
+                if let Some(new_sets) = self.ui.project_set_management(&[])? {
+                    self.config.project_sets = new_sets;
+                    self.config.save()?;
+                    println!("配置已保存！");
+                }
             }
-
-            let path = shellexpand::full(&input)
-                .map(|s| PathBuf::from(s.as_ref()))
-                .unwrap_or_else(|_| PathBuf::from(&input));
-
-            if path.exists() && path.is_dir() {
-                self.config.project_sets.push(path.clone());
-                println!("Added: {}", path.display());
-            } else {
-                println!(
-                    "Path does not exist or is not a directory: {}",
-                    path.display()
-                );
-            }
-
-            print!("Add more project sets? (y/n): ");
-            std::io::stdout().flush()?;
-            let mut more = String::new();
-            std::io::stdin().read_line(&mut more)?;
-            if !more.trim().to_lowercase().starts_with('y') {
-                break;
+            Some(OnboardingChoice::Skip) | None => {
+                // 直接进入主界面
             }
         }
-
-        if !self.config.project_sets.is_empty() {
-            self.config.save()?;
-            println!("Config saved!");
-        }
-
         Ok(())
     }
 }
