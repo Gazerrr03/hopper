@@ -307,7 +307,7 @@ impl UiBackend for FzfBackend {
         let args = [
             "--height=40%",
             "--layout=reverse",
-            "--border",
+            "--border=rounded",
             "--prompt=dev > ",
             "--header=Enter: select / x: delete / m: manage / type: new project",
             "--expect=enter,x,m",
@@ -350,7 +350,7 @@ impl UiBackend for FzfBackend {
         let args = [
             "--height=50%",
             "--layout=reverse",
-            "--border",
+            "--border=rounded",
             "--prompt=Select tool > ",
             "--with-nth=1",
             "--delimiter=\t",
@@ -385,9 +385,9 @@ impl UiBackend for FzfBackend {
     }
 
     fn confirm_deletion(&self, project_name: &str) -> Result<bool> {
-        let prompt = format!("Delete {} ? > ", project_name);
+        let prompt = format!("--prompt=Delete {} ? > ", project_name);
         let items = vec!["Yes".to_string(), "No".to_string()];
-        let args = ["--height=3", "--layout=reverse", "--border", &prompt];
+        let args = ["--height=3", "--layout=reverse", "--border=rounded", &prompt];
 
         match run_fzf(&items, &args, FzfOutputMode::default())? {
             FzfOutcome::Cancelled => Ok(false),
@@ -434,7 +434,7 @@ impl UiBackend for FzfBackend {
         let args = [
             "--height=10",
             "--layout=reverse",
-            "--border",
+            "--border=rounded",
             "--prompt=选择 > ",
             "--header=首次运行：选择操作",
         ];
@@ -459,7 +459,7 @@ impl UiBackend for FzfBackend {
         let args = [
             "--height=50%",
             "--layout=reverse",
-            "--border",
+            "--border=rounded",
             "--prompt=项目集 > ",
             "--header=Enter: 确认 / x: 删除 / n: 新增",
             "--expect=enter,x,n",
