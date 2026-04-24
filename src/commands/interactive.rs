@@ -2,7 +2,9 @@ use crate::core::cache::Cache;
 use crate::core::config::Config;
 use crate::core::project::{delete_project, discover_projects, sort_by_mru, Project};
 use crate::error::Result;
-use crate::ui::fzf::{OnboardingChoice, ProjectSelection, ProjectSelectionResult, SelectionType, UiBackend};
+use crate::ui::fzf::{
+    OnboardingChoice, ProjectSelection, ProjectSelectionResult, SelectionType, UiBackend,
+};
 use std::fs;
 
 pub struct InteractiveSession<'a> {
@@ -10,11 +12,15 @@ pub struct InteractiveSession<'a> {
     pub cache: &'a mut Cache,
     pub ui: &'a dyn UiBackend,
     pub dry_run: bool,
+    pub is_first_run: bool,
 }
 
 impl<'a> InteractiveSession<'a> {
     pub fn run(&mut self) -> Result<bool> {
         if self.config.project_sets.is_empty() {
+            if self.is_first_run {
+                println!("No hopper config found. Starting first-run setup...");
+            }
             self.run_onboarding()?;
         }
 
@@ -24,7 +30,15 @@ impl<'a> InteractiveSession<'a> {
         sort_by_mru(&mut projects, self.cache);
 
         if projects.is_empty() {
-            println!("No projects found. Add project sets in config.");
+            if self.config.project_sets.is_empty() {
+                println!(
+                    "No project sets configured. Run `hopper` in a regular terminal to bind one, or edit ~/.config/hopper/config.json."
+                );
+            } else {
+                println!(
+                    "No projects found under the configured project sets. Add a project directory or update your hopper config."
+                );
+            }
             return Ok(false);
         }
 
@@ -32,13 +46,9 @@ impl<'a> InteractiveSession<'a> {
             Some(ProjectSelectionResult::Selected(selection)) => {
                 self.handle_project_selection(&projects, selection)
             }
-            Some(ProjectSelectionResult::NewProject(name)) => {
-                self.handle_new_project(&name)
-            }
+            Some(ProjectSelectionResult::NewProject(name)) => self.handle_new_project(&name),
             Some(ProjectSelectionResult::ManageProjectSets) => {
-                if let Some(new_sets) =
-                    self.ui.project_set_management(&self.config.project_sets)?
-                {
+                if let Some(new_sets) = self.ui.project_set_management(&self.config.project_sets)? {
                     self.config.project_sets = new_sets;
                     self.config.save()?;
                 }
@@ -101,11 +111,9 @@ impl<'a> InteractiveSession<'a> {
     }
 
     fn handle_new_project(&mut self, name: &str) -> Result<bool> {
-        let base_set = self
-            .config
-            .project_sets
-            .first()
-            .ok_or_else(|| crate::error::ToolError::LaunchFailed("No project set configured".to_string()))?;
+        let base_set = self.config.project_sets.first().ok_or_else(|| {
+            crate::error::ToolError::LaunchFailed("No project set configured".to_string())
+        })?;
 
         let new_path = base_set.join(name);
         fs::create_dir_all(&new_path)?;
@@ -146,7 +154,9 @@ impl<'a> InteractiveSession<'a> {
                 }
             }
             Some(OnboardingChoice::Skip) | None => {
-                // 直接进入主界面
+                println!(
+                    "Skipped project-set setup. Run `hopper` again in a regular terminal when you want to bind project folders."
+                );
             }
         }
         Ok(())

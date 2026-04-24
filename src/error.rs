@@ -56,6 +56,9 @@ pub enum UiError {
     #[error("fzf is not installed. Run: brew install fzf")]
     FzfNotFound,
 
+    #[error("{0}")]
+    UnsupportedTerminal(String),
+
     #[error("fzf process error: {0}")]
     ProcessError(String),
 }
