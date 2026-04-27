@@ -44,6 +44,26 @@ pub fn launch_tool(tool: &Tool, project_path: &Path, dry_run: bool) -> Result<()
     Ok(())
 }
 
+pub fn open_shell(project_path: &Path, dry_run: bool) -> Result<()> {
+    if dry_run {
+        println!("[Dry-run] Would open shell in: {}", project_path.display());
+        return Ok(());
+    }
+
+    #[cfg(target_os = "windows")]
+    let shell = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd".to_string());
+
+    #[cfg(not(target_os = "windows"))]
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "zsh".to_string());
+
+    Command::new(shell)
+        .current_dir(project_path)
+        .status()
+        .map_err(|e| ToolError::LaunchFailed(e.to_string()))?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

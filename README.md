@@ -48,6 +48,31 @@ pacman -S fzf     # Arch
 winget install fzf
 ```
 
+### 可选：启用持久 cd
+
+CLI 程序本身不能直接修改父终端的当前目录。如果你希望“选中项目后在工具选择里点 `[Cancel]`，hopper 退出后当前终端就停在该项目目录”，需要安装 Hopper 的 shell integration：
+
+```bash
+# zsh
+echo 'eval "$(hopper init zsh)"' >> ~/.zshrc
+
+# bash
+echo 'eval "$(hopper init bash)"' >> ~/.bashrc
+
+# fish
+mkdir -p ~/.config/fish/conf.d
+hopper init fish > ~/.config/fish/conf.d/hopper.fish
+```
+
+PowerShell：
+
+```powershell
+if (!(Test-Path $PROFILE)) { New-Item -ItemType File -Path $PROFILE -Force | Out-Null }
+hopper init powershell | Add-Content $PROFILE
+```
+
+安装后重新打开终端，或手动 source 对应配置文件。
+
 ## 使用
 
 ### 交互模式（默认）
@@ -105,6 +130,8 @@ hopper
 
 选中后工具直接接管当前终端会话。
 
+如果你只想进入项目目录、不启动 coding agent，选择 `[Cancel]`。安装 shell integration 后，Hopper 退出时当前终端会直接 `cd` 到上一步选中的项目路径；未安装时，Hopper 会保持兼容行为，在该项目路径下打开一个子 shell。
+
 ### 非交互模式
 
 跳过所有选择，直接指定项目和工具：
@@ -137,6 +164,7 @@ hopper run my-app codex
 | `hopper` | 交互模式（默认） |
 | `hopper interactive` | 同上，显式指定 |
 | `hopper run <project> <tool>` | 非交互模式，一步到位 |
+| `hopper init <shell>` | 输出 shell integration，支持 `zsh` / `bash` / `fish` / `powershell` |
 | `--dry-run` | 只打印会执行的命令，不真正运行 |
 | `--config <path>` | 指定配置文件路径（或设 `HOPPER_CONFIG` 环境变量） |
 | `--cache-dir <path>` | 指定缓存目录路径（或设 `HOPPER_CACHE_DIR` 环境变量） |

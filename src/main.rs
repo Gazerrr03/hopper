@@ -4,7 +4,7 @@ mod core;
 mod error;
 mod ui;
 
-use crate::cli::Cli;
+use crate::cli::{shell_init_script, Cli};
 use crate::commands::interactive::InteractiveSession;
 use crate::commands::run::RunCommand;
 use crate::core::cache::Cache;
@@ -22,6 +22,12 @@ fn main() {
 
 fn run() -> Result<()> {
     let cli = Cli::parse();
+
+    if let Some(shell) = cli.init_shell() {
+        print!("{}", shell_init_script(shell));
+        return Ok(());
+    }
+
     let config_path = Config::resolve_path(cli.config.clone());
     let is_first_run = !config_path.exists();
 
@@ -37,6 +43,7 @@ fn run() -> Result<()> {
             ui: &ui,
             dry_run: cli.is_dry_run(),
             is_first_run,
+            cwd_file: cli.cwd_file.clone(),
         };
         session.run()?;
     } else if let Some((project, tool)) = cli.run_command() {

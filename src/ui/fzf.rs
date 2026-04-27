@@ -30,9 +30,16 @@ pub enum OnboardingChoice {
     Skip,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolSelection {
+    Tool(usize),
+    AddNew,
+    ProjectOnly,
+}
+
 pub trait UiBackend: Send + Sync {
     fn project_selection(&self, projects: &[Project]) -> Result<Option<ProjectSelectionResult>>;
-    fn tool_selection(&self, tools: &[Tool]) -> Result<Option<usize>>;
+    fn tool_selection(&self, tools: &[Tool]) -> Result<Option<ToolSelection>>;
     fn confirm_deletion(&self, name: &str) -> Result<bool>;
     fn add_tool_interactive(&self) -> Result<Option<(String, String)>>;
     fn onboarding_selection(&self) -> Result<Option<OnboardingChoice>>;
@@ -95,6 +102,9 @@ enum FzfOutcome {
     Cancelled,
     Selection(FzfResponse),
 }
+
+const ADD_TOOL_LABEL: &str = "[Add new tool...]";
+const CANCEL_TOOL_LABEL: &str = "[Cancel]";
 
 fn build_process_error(code: Option<i32>, stderr: &str) -> UiError {
     let stderr = stderr.trim();
@@ -244,6 +254,33 @@ fn parse_project_selection_response(
     None
 }
 
+fn parse_tool_selection_response(tools: &[Tool], response: FzfResponse) -> Option<ToolSelection> {
+    let selected = response.selection.unwrap_or_default();
+
+    if selected == CANCEL_TOOL_LABEL {
+        return Some(ToolSelection::ProjectOnly);
+    }
+
+    if selected == ADD_TOOL_LABEL {
+        return Some(ToolSelection::AddNew);
+    }
+
+    let clean_name = selected
+        .split('\t')
+        .next()
+        .unwrap_or(&selected)
+        .split('(')
+        .next()
+        .unwrap_or(&selected)
+        .trim()
+        .to_string();
+
+    tools
+        .iter()
+        .position(|tool| tool.name == clean_name)
+        .map(ToolSelection::Tool)
+}
+
 pub struct FzfBackend;
 
 impl FzfBackend {
@@ -332,7 +369,7 @@ impl UiBackend for FzfBackend {
         }
     }
 
-    fn tool_selection(&self, tools: &[Tool]) -> Result<Option<usize>> {
+    fn tool_selection(&self, tools: &[Tool]) -> Result<Option<ToolSelection>> {
         let mut items: Vec<String> = tools
             .iter()
             .map(|tool| {
@@ -344,8 +381,8 @@ impl UiBackend for FzfBackend {
             })
             .collect();
 
-        items.push("[Add new tool...]".to_string());
-        items.push("[Cancel]".to_string());
+        items.push(ADD_TOOL_LABEL.to_string());
+        items.push(CANCEL_TOOL_LABEL.to_string());
 
         let args = [
             "--height=50%",
@@ -358,36 +395,19 @@ impl UiBackend for FzfBackend {
 
         match run_fzf(&items, &args, FzfOutputMode::default())? {
             FzfOutcome::Cancelled => Ok(None),
-            FzfOutcome::Selection(response) => {
-                let selected = response.selection.unwrap_or_default();
-
-                if selected == "[Cancel]" {
-                    return Ok(None);
-                }
-
-                if selected == "[Add new tool...]" {
-                    return Ok(Some(usize::MAX));
-                }
-
-                let clean_name = selected
-                    .split('\t')
-                    .next()
-                    .unwrap_or(&selected)
-                    .split('(')
-                    .next()
-                    .unwrap_or(&selected)
-                    .trim()
-                    .to_string();
-
-                Ok(tools.iter().position(|tool| tool.name == clean_name))
-            }
+            FzfOutcome::Selection(response) => Ok(parse_tool_selection_response(tools, response)),
         }
     }
 
     fn confirm_deletion(&self, project_name: &str) -> Result<bool> {
         let prompt = format!("--prompt=Delete {} ? > ", project_name);
         let items = vec!["Yes".to_string(), "No".to_string()];
-        let args = ["--height=3", "--layout=reverse", "--border=rounded", &prompt];
+        let args = [
+            "--height=3",
+            "--layout=reverse",
+            "--border=rounded",
+            &prompt,
+        ];
 
         match run_fzf(&items, &args, FzfOutputMode::default())? {
             FzfOutcome::Cancelled => Ok(false),
@@ -512,6 +532,21 @@ mod tests {
         }]
     }
 
+    fn sample_tools() -> Vec<Tool> {
+        vec![
+            Tool {
+                name: "claude".to_string(),
+                command: "claude".to_string(),
+                recent: 0,
+            },
+            Tool {
+                name: "codex".to_string(),
+                command: "codex".to_string(),
+                recent: 3,
+            },
+        ]
+    }
+
     #[test]
     fn test_selection_type_equality() {
         assert_eq!(SelectionType::Enter, SelectionType::Enter);
@@ -605,6 +640,42 @@ mod tests {
 
         let parsed = parse_project_selection_response(&sample_projects(), response);
         assert_eq!(parsed, Some(ProjectSelectionResult::ManageProjectSets));
+    }
+
+    #[test]
+    fn test_parse_tool_selection_cancel_opens_project_only() {
+        let response = FzfResponse {
+            key: None,
+            query: None,
+            selection: Some(CANCEL_TOOL_LABEL.to_string()),
+        };
+
+        let parsed = parse_tool_selection_response(&sample_tools(), response);
+        assert_eq!(parsed, Some(ToolSelection::ProjectOnly));
+    }
+
+    #[test]
+    fn test_parse_tool_selection_add_new_tool() {
+        let response = FzfResponse {
+            key: None,
+            query: None,
+            selection: Some(ADD_TOOL_LABEL.to_string()),
+        };
+
+        let parsed = parse_tool_selection_response(&sample_tools(), response);
+        assert_eq!(parsed, Some(ToolSelection::AddNew));
+    }
+
+    #[test]
+    fn test_parse_tool_selection_strips_use_count() {
+        let response = FzfResponse {
+            key: None,
+            query: None,
+            selection: Some("codex (use count: 3)".to_string()),
+        };
+
+        let parsed = parse_tool_selection_response(&sample_tools(), response);
+        assert_eq!(parsed, Some(ToolSelection::Tool(1)));
     }
 
     #[test]
