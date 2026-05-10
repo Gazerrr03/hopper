@@ -13,11 +13,38 @@ pub struct Tool {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AddOn {
+    pub name: String,
+    pub display: String,
+    pub detect: String,
+    pub setup: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     #[serde(rename = "projectSets", default)]
     pub project_sets: Vec<PathBuf>,
     #[serde(default)]
     pub tools: Vec<Tool>,
+    #[serde(default = "default_addons")]
+    pub addons: Vec<AddOn>,
+}
+
+fn default_addons() -> Vec<AddOn> {
+    vec![
+        AddOn {
+            name: "openwolf".to_string(),
+            display: "OpenWolf".to_string(),
+            detect: ".wolf".to_string(),
+            setup: "openwolf init".to_string(),
+        },
+        AddOn {
+            name: "aidesigner".to_string(),
+            display: "AiDesigner".to_string(),
+            detect: ".aidesigner".to_string(),
+            setup: "npx aidesigner@latest init && npm install".to_string(),
+        },
+    ]
 }
 
 impl Default for Config {
@@ -36,6 +63,7 @@ impl Default for Config {
                     recent: 0,
                 },
             ],
+            addons: default_addons(),
         }
     }
 }
@@ -117,6 +145,9 @@ mod tests {
         let config = Config::default();
         assert!(config.project_sets.is_empty());
         assert_eq!(config.tools.len(), 2);
+        assert_eq!(config.addons.len(), 2);
+        assert_eq!(config.addons[0].name, "openwolf");
+        assert_eq!(config.addons[1].name, "aidesigner");
     }
 
     #[test]

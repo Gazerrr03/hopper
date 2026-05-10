@@ -1,4 +1,4 @@
-use crate::core::config::Tool;
+use crate::core::config::{AddOn, Tool};
 use crate::core::project::Project;
 use crate::error::{Result, UiError};
 use std::io::{stdin, stdout, IsTerminal, Write};
@@ -44,6 +44,7 @@ pub trait UiBackend: Send + Sync {
     fn add_tool_interactive(&self) -> Result<Option<(String, String)>>;
     fn onboarding_selection(&self) -> Result<Option<OnboardingChoice>>;
     fn project_set_management(&self, current_sets: &[PathBuf]) -> Result<Option<Vec<PathBuf>>>;
+    fn addon_selection(&self, addons: &[&AddOn]) -> Result<Vec<usize>>;
 }
 
 fn check_fzf() -> Result<()> {
@@ -254,6 +255,19 @@ fn parse_project_selection_response(
     None
 }
 
+fn parse_addon_multi_select(addons: &[&AddOn], output: &str) -> Vec<usize> {
+    let selected_labels: Vec<&str> = output.lines().map(|l| l.trim()).collect();
+    addons
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| {
+            let item = format!("{} | {}", a.display, a.setup);
+            selected_labels.iter().any(|label| label == &item.as_str())
+        })
+        .map(|(i, _)| i)
+        .collect()
+}
+
 fn parse_tool_selection_response(tools: &[Tool], response: FzfResponse) -> Option<ToolSelection> {
     let selected = response.selection.unwrap_or_default();
 
@@ -396,6 +410,36 @@ impl UiBackend for FzfBackend {
         match run_fzf(&items, &args, FzfOutputMode::default())? {
             FzfOutcome::Cancelled => Ok(None),
             FzfOutcome::Selection(response) => Ok(parse_tool_selection_response(tools, response)),
+        }
+    }
+
+    fn addon_selection(&self, addons: &[&AddOn]) -> Result<Vec<usize>> {
+        let items: Vec<String> = addons
+            .iter()
+            .map(|a| format!("{} | {}", a.display, a.setup))
+            .collect();
+
+        let args = [
+            "--height=40%",
+            "--layout=reverse",
+            "--border=rounded",
+            "--multi",
+            "--prompt=Add-ons > ",
+            "--header=Tab: select / Enter: confirm / Esc: skip all",
+            "--bind=tab:toggle+down",
+            "--with-nth=1",
+            "--delimiter=|",
+        ];
+
+        match run_fzf(&items, &args, FzfOutputMode::default())? {
+            FzfOutcome::Cancelled => Ok(Vec::new()),
+            FzfOutcome::Selection(response) => {
+                let selected = response.selection.unwrap_or_default();
+                if selected.trim().is_empty() {
+                    return Ok(Vec::new());
+                }
+                Ok(parse_addon_multi_select(addons, &selected))
+            }
         }
     }
 

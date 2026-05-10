@@ -1,4 +1,4 @@
-use crate::core::config::Tool;
+use crate::core::config::{AddOn, Tool};
 use crate::error::{Result, ToolError};
 use std::path::Path;
 use std::process::Command;
@@ -37,6 +37,32 @@ pub fn launch_tool(tool: &Tool, project_path: &Path, dry_run: bool) -> Result<()
             .arg("-i")
             .arg("-c")
             .arg(&command)
+            .status()
+            .map_err(|e| ToolError::LaunchFailed(e.to_string()))?;
+    }
+
+    Ok(())
+}
+
+pub fn run_addon_setup(addon: &AddOn, project_path: &Path) -> Result<()> {
+    let command = replace_variables(&addon.setup, project_path);
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .args(["/C", &command])
+            .current_dir(project_path)
+            .status()
+            .map_err(|e| ToolError::LaunchFailed(e.to_string()))?;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Command::new("zsh")
+            .arg("-i")
+            .arg("-c")
+            .arg(&command)
+            .current_dir(project_path)
             .status()
             .map_err(|e| ToolError::LaunchFailed(e.to_string()))?;
     }

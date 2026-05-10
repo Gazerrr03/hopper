@@ -112,6 +112,31 @@ impl<'a> InteractiveSession<'a> {
                         self.config.save()?;
 
                         let tool = &self.config.tools[idx];
+
+                        // 附加插件：检测未安装的，弹多选界面
+                        let uninstalled: Vec<&crate::core::config::AddOn> = self
+                            .config
+                            .addons
+                            .iter()
+                            .filter(|a| !proj.path.join(&a.detect).exists())
+                            .collect();
+
+                        if !uninstalled.is_empty() {
+                            let selected = self.ui.addon_selection(&uninstalled)?;
+                            for idx in selected {
+                                let addon = &uninstalled[idx];
+                                println!("初始化 {}...", addon.display);
+                                if let Err(e) =
+                                    crate::core::tool::run_addon_setup(addon, &proj.path)
+                                {
+                                    eprintln!(
+                                        "⚠ {} init 失败，继续启动：{e}",
+                                        addon.display
+                                    );
+                                }
+                            }
+                        }
+
                         crate::core::tool::launch_tool(tool, &proj.path, self.dry_run)?;
 
                         Ok(false)
@@ -158,6 +183,31 @@ impl<'a> InteractiveSession<'a> {
                 self.config.save()?;
 
                 let tool = &self.config.tools[idx];
+
+                // 附加插件：检测未安装的，弹多选界面
+                let uninstalled: Vec<&crate::core::config::AddOn> = self
+                    .config
+                    .addons
+                    .iter()
+                    .filter(|a| !new_path.join(&a.detect).exists())
+                    .collect();
+
+                if !uninstalled.is_empty() {
+                    let selected = self.ui.addon_selection(&uninstalled)?;
+                    for idx in selected {
+                        let addon = &uninstalled[idx];
+                        println!("初始化 {}...", addon.display);
+                        if let Err(e) =
+                            crate::core::tool::run_addon_setup(addon, &new_path)
+                        {
+                            eprintln!(
+                                "⚠ {} init 失败，继续启动：{e}",
+                                addon.display
+                            );
+                        }
+                    }
+                }
+
                 crate::core::tool::launch_tool(tool, &new_path, self.dry_run)?;
                 Ok(false)
             }
@@ -257,12 +307,17 @@ mod tests {
         ) -> Result<Option<Vec<PathBuf>>> {
             Ok(None)
         }
+
+        fn addon_selection(&self, _addons: &[&crate::core::config::AddOn]) -> Result<Vec<usize>> {
+            Ok(Vec::new())
+        }
     }
 
     fn config_with_project_set(project_set: PathBuf) -> Config {
         Config {
             project_sets: vec![project_set],
             tools: Vec::new(),
+            addons: Vec::new(),
         }
     }
 
