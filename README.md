@@ -18,15 +18,31 @@ Hopper 是一个跨平台 CLI 项目启动器。输入 `hopper`，选项目、�
 
 ## 安装
 
-### macOS / Linux
+### 方式一：cargo install（推荐）
+
+需要 [Rust](https://rustup.rs/) 环境：
+
+```bash
+# 从本地源码安装
+git clone https://github.com/qizhidong/hopper.git
+cd hopper
+cargo install --path .
+
+# 安装完成后直接可用
+hopper
+```
+
+### 方式二：预编译二进制（即将推出）
+
+等 GitHub Releases 发布后，可通过安装脚本一键安装：
+
+macOS / Linux:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/qizhidong/hopper/main/install.sh | sh
 ```
 
-### Windows
-
-PowerShell 中运行：
+Windows (PowerShell):
 
 ```powershell
 irm https://raw.githubusercontent.com/qizhidong/hopper/main/install.ps1 | iex
@@ -34,7 +50,8 @@ irm https://raw.githubusercontent.com/qizhidong/hopper/main/install.ps1 | iex
 
 ### 前置依赖
 
-- [fzf](https://github.com/junegunn/fzf) — 交互选择器
+- **[Rust](https://rustup.rs/)** — 编译工具链（`cargo install` 方式需要）
+- **[fzf](https://github.com/junegunn/fzf)** — 交互选择器
 
 ```bash
 # macOS
@@ -201,14 +218,16 @@ hopper run my-app codex
 
 例：`claude --project-path $PROJECT_PATH`
 
-## 构建
+## 开发构建
 
-需要 [Rust](https://rustup.rs/) 环境：
+只编译不安装（二进制在 `target/release/` 下）：
 
 ```bash
 cargo build --release
-./target/release/hopper
+./target/release/hopper    # 需要带路径，不能直接敲 hopper
 ```
+
+如果想全局可用，用 `cargo install --path .` 代替 `cargo build`。
 
 ## License
 

@@ -63,6 +63,8 @@ fn validate_terminal_support(
     stdout_is_terminal: bool,
     term: &str,
 ) -> Result<()> {
+    #[cfg(not(unix))]
+    let _ = term;
     if !stdin_is_terminal || !stdout_is_terminal {
         return Err(UiError::UnsupportedTerminal(
             "Interactive mode requires a real terminal (TTY). Run `hopper` in your terminal, or use `hopper run <project> <tool>` for non-interactive launches.".to_string(),
@@ -70,6 +72,8 @@ fn validate_terminal_support(
         .into());
     }
 
+    // Windows consoles don't set TERM; fzf works fine without it.
+    #[cfg(unix)]
     if term.is_empty() || term == "dumb" {
         return Err(UiError::UnsupportedTerminal(
             "Interactive mode needs a terminal that supports fzf. The current TERM is not supported; open a normal shell and run `hopper` there.".to_string(),
@@ -732,6 +736,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn test_validate_terminal_support_rejects_dumb_term() {
         let err = validate_terminal_support(true, true, "dumb").unwrap_err();
         assert_eq!(
